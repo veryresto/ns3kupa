@@ -1,0 +1,15 @@
+# executed commands on core node
+ip -f inet addr add 10.9.2.2/24 dev sim0 
+ip link set sim0 up arp off 
+ip route add to 0.0.0.0/0.0.0.0 via 10.9.2.1 
+ip link set lo up 
+ip route add 10.9.1.1/255.255.255.255 via 10.9.2.1 
+iperf -c 10.9.1.1 -i 1 --time 2 
+
+# executed commands on mobile node
+ip -f inet addr add 10.9.1.1/24 dev sim0 
+ip link set sim0 up arp off 
+ip route add to 0.0.0.0/0.0.0.0 via 10.9.1.2 
+ip link set lo up 
+ip route add 10.9.2.2/255.255.255.255 via 10.9.1.2 
+iperf -s -P 1 

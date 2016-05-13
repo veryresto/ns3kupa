@@ -117,7 +117,9 @@ int main(int argc, char *argv[]) {
     double avg_delay = 1;
     int htmlSize = 2; // in mega bytes
     char TypeOfConnection = 'p'; // iperf tcp connection
-    string dataRate = "10Mbps";
+    string dataRateUp = "10Mbps";
+    string dataRateDown = "10Mbps";
+    bool downloadMode = true;
 
     std::string bandWidth = "1m";
     CommandLine cmd;
@@ -127,8 +129,10 @@ int main(int argc, char *argv[]) {
     cmd.AddValue("toc",
                  "Link type: p for iperf-tcp, u for iperf-udp and w for wget-thttpd, default to iperf-tcp",
                  TypeOfConnection);
+    cmd.AddValue("ModeOperation", "True for download mode. False for upload moded. HTTP will always be download mode.", downloadMode);
     cmd.AddValue("htmlSize", "Size of html to be downloaded by wget (Mbytes).", htmlSize);
-    cmd.AddValue("dataRate", "Data rate of devices (Mbps).", dataRate);
+    cmd.AddValue("dataRateUp", "Data rate of devices (Mbps).", dataRateUp);
+    cmd.AddValue("dataRateDown", "Data rate of devices (Mbps).", dataRateDown);
     cmd.AddValue("bw", "BandWidth. Default 1m.", bandWidth);
     cmd.AddValue("errRate", "Error rate.", errRate);
     cmd.AddValue("avg_delay", "Average delay.", avg_delay);
@@ -147,10 +151,20 @@ int main(int argc, char *argv[]) {
 
     if (delay < 0) {
         cout << "Impossible delay. Abort simulation" << std::endl;
-        cout << "Upstream" << std::endl;
-        cout << "Calculating theta" << std::endl;
-        cout << "Calculating node processing time" << std::endl;
+        cout << "Downstream" << std::endl;
+        cout << "Calculated theta" << theta << std::endl;
+        cout << "Calculated node processing time" << delay << std::endl;
         return 0;
+    }
+
+    // Determining Mode
+    if (downloadMode) {
+        std::cout << "Download mode is used " << std::endl;
+        mode = 0;
+    }
+    if (!downloadMode) {
+        std::cout << "Upload mode is used " << std::endl;
+        mode = 1;
     }
 
     // Building topology
@@ -183,7 +197,7 @@ int main(int argc, char *argv[]) {
     // p2p2 #1
     // Beginning of channel for mobile router to BSDown
     PointToPointHelper pointToPoint;
-    pointToPoint.SetDeviceAttribute("DataRate", StringValue(dataRate));
+    pointToPoint.SetDeviceAttribute("DataRate", StringValue(dataRateDown));
     pointToPoint.SetChannelAttribute("Delay", StringValue("1ms"));
     NetDeviceContainer chanRouterBSDown = pointToPoint.Install(routerBSDown);
     // Ending of channel for mobile router to BSDown
@@ -191,7 +205,7 @@ int main(int argc, char *argv[]) {
     // p2p #2
     // Beginning of channel for mobile router to BSUp
     PointToPointHelper p2pMobRouterBSUp;
-    p2pMobRouterBSUp.SetDeviceAttribute("DataRate", StringValue(dataRate));
+    p2pMobRouterBSUp.SetDeviceAttribute("DataRate", StringValue(dataRateUp));
     p2pMobRouterBSUp.SetChannelAttribute("Delay", StringValue("1ms"));
     NetDeviceContainer chanRouterBSUp = p2pMobRouterBSUp.Install(routerBSUp);
     // Ending of channel for mobile router to BSUp
@@ -199,7 +213,7 @@ int main(int argc, char *argv[]) {
     // p2p #3
     // Beginning of channel for core router to BSDown
     PointToPointHelper p2pCoreRouterBSDown;
-    p2pCoreRouterBSDown.SetDeviceAttribute("DataRate", StringValue(dataRate));
+    p2pCoreRouterBSDown.SetDeviceAttribute("DataRate", StringValue("200Gbps"));
     p2pCoreRouterBSDown.SetChannelAttribute("Delay", StringValue("1ms"));
     p2pCoreRouterBSDown.SetChannelAttribute("Jitter", UintegerValue(1));
     p2pCoreRouterBSDown.SetChannelAttribute("k", DoubleValue(k));
@@ -211,7 +225,7 @@ int main(int argc, char *argv[]) {
     // p2p #4
     // Beginning of channel for core router to BSUp
     PointToPointHelper p2pCoreRouterBSUp;
-    p2pCoreRouterBSUp.SetDeviceAttribute("DataRate", StringValue(dataRate));
+    p2pCoreRouterBSUp.SetDeviceAttribute("DataRate", StringValue("200Gbps"));
     p2pCoreRouterBSUp.SetChannelAttribute("Delay", StringValue("1ms"));
     p2pCoreRouterBSUp.SetChannelAttribute("Jitter", UintegerValue(1));
     p2pCoreRouterBSUp.SetChannelAttribute("k", DoubleValue(k));
@@ -222,24 +236,26 @@ int main(int argc, char *argv[]) {
 
     // p2p #5
     // Beginng of channel for mobile router to mobile
-    pointToPoint.SetDeviceAttribute("DataRate", StringValue(dataRate));
-    pointToPoint.SetChannelAttribute("Delay", StringValue("1ms"));
-    pointToPoint.SetChannelAttribute("Jitter", UintegerValue(1));
-    pointToPoint.SetChannelAttribute("k", DoubleValue(k));
-    pointToPoint.SetChannelAttribute("transparent", UintegerValue(0));
-    pointToPoint.SetChannelAttribute("theta", DoubleValue(theta));
-    NetDeviceContainer chanMobileRouter = pointToPoint.Install(mobileRouter);
+    PointToPointHelper p2pMobRouter;
+    p2pMobRouter.SetDeviceAttribute("DataRate", StringValue("200Gbps"));
+    p2pMobRouter.SetChannelAttribute("Delay", StringValue("1ms"));
+    p2pMobRouter.SetChannelAttribute("transparent", UintegerValue(1));
+    p2pMobRouter.SetChannelAttribute("coreRouter", UintegerValue(0));
+    p2pMobRouter.SetChannelAttribute("monitor", UintegerValue(monitor));
+    p2pMobRouter.SetChannelAttribute("mode", UintegerValue(mode));
+    NetDeviceContainer chanMobileRouter = p2pMobRouter.Install(mobileRouter);
     // Ending of channel for mobile router to mobile
 
     // p2p #6
     // Beginng of channel for core router to core
-    pointToPoint.SetDeviceAttribute("DataRate", StringValue(dataRate));
-    pointToPoint.SetChannelAttribute("Delay", StringValue("1ms"));
-    pointToPoint.SetChannelAttribute("Jitter", UintegerValue(1));
-    pointToPoint.SetChannelAttribute("k", DoubleValue(k));
-    pointToPoint.SetChannelAttribute("transparent", UintegerValue(0));
-    pointToPoint.SetChannelAttribute("theta", DoubleValue(theta));
-    NetDeviceContainer chanRouterCore = pointToPoint.Install(routerCore);
+    PointToPointHelper p2pCoreRouter;
+    p2pCoreRouter.SetDeviceAttribute("DataRate", StringValue("200Gbps"));
+    p2pCoreRouter.SetChannelAttribute("Delay", StringValue("1ms"));
+    p2pMobRouter.SetChannelAttribute("transparent", UintegerValue(1));
+    p2pMobRouter.SetChannelAttribute("coreRouter", UintegerValue(1));
+    p2pMobRouter.SetChannelAttribute("monitor", UintegerValue(monitor));
+    p2pMobRouter.SetChannelAttribute("mode", UintegerValue(mode));
+    NetDeviceContainer chanRouterCore = p2pCoreRouter.Install(routerCore);
     // Ending of channel for core router to core
 
     Ptr <RateErrorModel> em = CreateObjectWithAttributes<RateErrorModel>(
@@ -374,12 +390,12 @@ int main(int argc, char *argv[]) {
         // mobile router
         cmd_oss.str("");
         cmd_oss << "route add " << "10.9.2.2" << "/255.255.255.255" << " via " << "10.2.1.2";
-        LinuxStackHelper::RunIp(router.Get(0), Seconds(0.1), cmd_oss.str().c_str());
+        //LinuxStackHelper::RunIp(router.Get(0), Seconds(0.1), cmd_oss.str().c_str());
 
         // core router
         cmd_oss.str("");
         cmd_oss << "route add " << "10.9.1.1" << "/255.255.255.255" << " via " << "10.1.2.1";
-        LinuxStackHelper::RunIp(router.Get(1), Seconds(0.1), cmd_oss.str().c_str());
+        //LinuxStackHelper::RunIp(router.Get(1), Seconds(0.1), cmd_oss.str().c_str());
 
         // BS DOWNLINK
         cmd_oss.str("");
@@ -404,63 +420,139 @@ int main(int argc, char *argv[]) {
 
     switch (TypeOfConnection) {
         case 'p': {
-            //chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
-            //chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+            if(downloadMode){
+                //chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+                //chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em));
 
-            // Launch iperf client on node 5 (core)
-            dce.SetBinary("iperf");
-            dce.ResetArguments();
-            dce.ResetEnvironment();
-            dce.AddArgument("-c");
-            dce.AddArgument("10.9.1.1");
-            dce.AddArgument("-i");
-            dce.AddArgument("1");
-            dce.AddArgument("--time");
-            dce.AddArgument("2");
-            ApplicationContainer ClientApps0 = dce.Install(core.Get(0));
-            ClientApps0.Start(Seconds(0.7));
-            ClientApps0.Stop(Seconds(20));
+                // Launch iperf client on node 5 (core)
+                dce.SetBinary("iperf");
+                dce.ResetArguments();
+                dce.ResetEnvironment();
+                dce.AddArgument("-c");
+                dce.AddArgument("10.9.1.1");
+                dce.AddArgument("-i");
+                dce.AddArgument("1");
+                dce.AddArgument("--time");
+                dce.AddArgument("2");
+                ApplicationContainer ClientApps0 = dce.Install(core.Get(0));
+                ClientApps0.Start(Seconds(0.7));
+                ClientApps0.Stop(Seconds(20));
 
-            // Launch iperf server on node 0 (mobile device)
-            dce.SetBinary("iperf");
-            dce.ResetArguments();
-            dce.ResetEnvironment();
-            dce.AddArgument("-s");
-            dce.AddArgument("-P");
-            dce.AddArgument("1");
-            ApplicationContainer SerApps0 = dce.Install(mobile.Get(0));
-            SerApps0.Start(Seconds(0.6));
+                // dump traffics from all channels
+                p2pMobRouter.EnablePcapAll("TCP_download");
+
+                // Launch iperf server on node 0 (mobile device)
+                dce.SetBinary("iperf");
+                dce.ResetArguments();
+                dce.ResetEnvironment();
+                dce.AddArgument("-s");
+                dce.AddArgument("-P");
+                dce.AddArgument("1");
+                ApplicationContainer SerApps0 = dce.Install(mobile.Get(0));
+                SerApps0.Start(Seconds(0.6));
+
+            } else {
+                //chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+                //chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+
+                // Launch iperf client on node 0 (mobile device)
+                dce.SetBinary("iperf");
+                dce.ResetArguments();
+                dce.ResetEnvironment();
+                dce.AddArgument("-c");
+                dce.AddArgument("10.9.2.2");
+                dce.AddArgument("-i");
+                dce.AddArgument("1");
+                dce.AddArgument("--time");
+                dce.AddArgument("2");
+                ApplicationContainer ClientApps0 = dce.Install(mobile.Get(0));
+                ClientApps0.Start(Seconds(0.7));
+                ClientApps0.Stop(Seconds(20));
+
+                // dump traffics from all channels
+                p2pMobRouter.EnablePcapAll("TCP_upload");
+
+                // Launch iperf server on node 5 (core)
+                dce.SetBinary("iperf");
+                dce.ResetArguments();
+                dce.ResetEnvironment();
+                dce.AddArgument("-s");
+                dce.AddArgument("-P");
+                dce.AddArgument("1");
+                ApplicationContainer SerApps0 = dce.Install(core.Get(0));
+                SerApps0.Start(Seconds(0.6));
+
+            }
+            
         }
             break;
 
         case 'u': {
-            // Launch iperf client on node 5 (core)
-            dce.SetBinary("iperf");
-            dce.ResetArguments();
-            dce.ResetEnvironment();
-            dce.AddArgument("-c");
-            dce.AddArgument("10.9.1.1");
-            dce.AddArgument("-i");
-            dce.AddArgument("1");
-            dce.AddArgument("--time");
-            dce.AddArgument("2");
-            dce.AddArgument("-u");
-            dce.AddArgument("-b");
-            dce.AddArgument(bandWidth);
-            ApplicationContainer apps = dce.Install(core.Get(0));
-            apps.Start(Seconds(0.7));
-            apps.Stop(Seconds(20));
+            if(downloadMode){
+                // Launch iperf client on node 5 (core)
+                dce.SetBinary("iperf");
+                dce.ResetArguments();
+                dce.ResetEnvironment();
+                dce.AddArgument("-c");
+                dce.AddArgument("10.9.1.1");
+                dce.AddArgument("-i");
+                dce.AddArgument("1");
+                dce.AddArgument("--time");
+                dce.AddArgument("2");
+                dce.AddArgument("-u");
+                dce.AddArgument("-b");
+                dce.AddArgument(bandWidth);
+                ApplicationContainer apps = dce.Install(core.Get(0));
+                apps.Start(Seconds(0.7));
+                apps.Stop(Seconds(20));
 
-            // Launch iperf server on node 0 (mobile)
-            dce.SetBinary("iperf");
-            dce.ResetArguments();
-            dce.ResetEnvironment();
-            dce.AddArgument("-s");
-            dce.AddArgument("-P");
-            dce.AddArgument("1");
-            dce.AddArgument("-u");
-            ApplicationContainer ServerApps0 = dce.Install(mobile.Get(0));
-            ServerApps0.Start(Seconds(0.6));
+                // dump traffics from all channels
+                p2pMobRouter.EnablePcapAll("UDP_download");
+
+                // Launch iperf server on node 0 (mobile)
+                dce.SetBinary("iperf");
+                dce.ResetArguments();
+                dce.ResetEnvironment();
+                dce.AddArgument("-s");
+                dce.AddArgument("-P");
+                dce.AddArgument("1");
+                dce.AddArgument("-u");
+                ApplicationContainer ServerApps0 = dce.Install(mobile.Get(0));
+                ServerApps0.Start(Seconds(0.6));
+
+            } else {
+                // Launch iperf client on node 0 (mobile)
+                dce.SetBinary("iperf");
+                dce.ResetArguments();
+                dce.ResetEnvironment();
+                dce.AddArgument("-c");
+                dce.AddArgument("10.9.2.2");
+                dce.AddArgument("-i");
+                dce.AddArgument("1");
+                dce.AddArgument("--time");
+                dce.AddArgument("2");
+                dce.AddArgument("-u");
+                dce.AddArgument("-b");
+                dce.AddArgument(bandWidth);
+                ApplicationContainer apps = dce.Install(mobile.Get(0));
+                apps.Start(Seconds(0.7));
+                apps.Stop(Seconds(20));
+
+                // dump traffics from all channels
+                p2pMobRouter.EnablePcapAll("UDP_upload");
+
+                // Launch iperf server on node 0 (mobile)
+                dce.SetBinary("iperf");
+                dce.ResetArguments();
+                dce.ResetEnvironment();
+                dce.AddArgument("-s");
+                dce.AddArgument("-P");
+                dce.AddArgument("1");
+                dce.AddArgument("-u");
+                ApplicationContainer ServerApps0 = dce.Install(core.Get(0));
+                ServerApps0.Start(Seconds(0.6));
+            }
+            
         }
             break;
 
@@ -481,7 +573,7 @@ int main(int argc, char *argv[]) {
             dce.SetBinary("wget");
             dce.ResetArguments();
             dce.ResetEnvironment();
-            dce.AddArgument("http://192.168.1.2/index.html");
+            dce.AddArgument("http://10.9.2.2/index.html");
             dce.AddArgument("-o");
             dce.AddArgument("wgetlog");
             //dce.AddArgument("-r");
