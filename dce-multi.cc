@@ -106,13 +106,14 @@ static void RunIP(Ptr <Node> node, Time at, string str) {
 }
 
 int main(int argc, char *argv[]) {
-    string stack = "ns3";
+    string stack = "linux";
     double errRate = 0.001;
     int ErrorModel = 1;
     int monitor = 1;
     int mode = 0;
+    string tcp_cc = "reno";
 
-    double k = 0;
+    double k = 1;
     double pdv = 0;
     double avg_delay = 1;
     int htmlSize = 2; // in mega bytes
@@ -130,6 +131,9 @@ int main(int argc, char *argv[]) {
                  "Link type: p for iperf-tcp, u for iperf-udp and w for wget-thttpd, default to iperf-tcp",
                  TypeOfConnection);
     cmd.AddValue("ModeOperation", "True for download mode. False for upload moded. HTTP will always be download mode.", downloadMode);
+    cmd.AddValue("tcp_cc",
+                 "TCP congestion control algorithm. Default is reno. Other options: bic, cubic, highspeed, htcp, hybla, illinois, lp, probe, scalable, vegas, veno, westwood, yeah",
+                 tcp_cc);
     cmd.AddValue("htmlSize", "Size of html to be downloaded by wget (Mbytes).", htmlSize);
     cmd.AddValue("dataRateUp", "Data rate of devices (Mbps).", dataRateUp);
     cmd.AddValue("dataRateDown", "Data rate of devices (Mbps).", dataRateDown);
@@ -142,7 +146,7 @@ int main(int argc, char *argv[]) {
 
     // Calculating theta and delay
     double delay;
-    double theta;
+    double theta = 0;
     double pk = FindPk(k);
 
     theta = pdv / pk;
@@ -318,6 +322,11 @@ int main(int argc, char *argv[]) {
         routerStack.Install(router);
         stack.Install (BS);
         stack.Install (core);
+
+        stack.SysctlSet (mobile, ".net.ipv4.tcp_congestion_control", tcp_cc);
+        stack.SysctlSet (BS, ".net.ipv4.tcp_congestion_control", tcp_cc);
+        stack.SysctlSet (core, ".net.ipv4.tcp_congestion_control", tcp_cc);
+        stack.SysctlSet (router, ".net.ipv4.tcp_congestion_control", tcp_cc);
 #else
         NS_LOG_ERROR("Linux kernel stack for DCE is not available. build with dce-linux module.");
         // silently exit
