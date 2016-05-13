@@ -148,6 +148,7 @@ int main(int argc, char *argv[]) {
     string udp_bw = "1";
 
     int ErrorModel = 1;
+    int ErrorModel2 = 1;
     int monitor = 1;
     int mode = 0;
 
@@ -176,7 +177,14 @@ int main(int argc, char *argv[]) {
     cmd.AddValue("dataRateUp", "Data rate of devices (Mbps).", dataRateUp);
     cmd.AddValue("dataRateDown", "Data rate of devices (Mbps).", dataRateDown);
     cmd.AddValue("udp_bw", "BandWidth. Default 1m.", udp_bw);
-    cmd.AddValue("errRate", "Error rate.", errRate);
+    cmd.AddValue("errRate", "Error rate for downloaded.", errRate);
+    cmd.AddValue("errRate2", "Error rate for upload.", errRate2);
+    cmd.AddValue("ErrorModel",
+                 "Choose error model you want to use. options: 1 -rate error model-default, 2 - burst error model",
+                 ErrorModel);
+    cmd.AddValue("ErrorModel2",
+                 "Choose error model you want to use. options: 1 -rate error model-default, 2 - burst error model",
+                 ErrorModel2);
     cmd.AddValue("avg_delay", "Average delay.", avg_delay);
     cmd.AddValue("pdv", "theta for normal random distribution in this channel", pdv);
     cmd.AddValue("chan_k", "Normal random distribution k in this channel", k);
@@ -328,6 +336,36 @@ int main(int argc, char *argv[]) {
     else {
         //this will not change the error model
         std::cout << "Unknown download error model. Restore to default: rate error model" << std::endl;
+    }
+
+    Ptr <RateErrorModel> em2 = CreateObjectWithAttributes<RateErrorModel>(
+            "RanVar", StringValue("ns3::UniformRandomVariable[Min=0.0,Max=1.0]"),
+            "ErrorRate", DoubleValue(errRate2),
+            "ErrorUnit", EnumValue(RateErrorModel::ERROR_UNIT_PACKET)
+    );
+    std::cout << "Building error model..." << std::endl;
+
+    if (ErrorModel2 == 1) {
+        std::cout << "Rate Error Model is selected" << std::endl;
+        Ptr <RateErrorModel> em2 = CreateObjectWithAttributes<RateErrorModel>(
+                "RanVar", StringValue("ns3::UniformRandomVariable[Min=0.0,Max=1.0]"),
+                "ErrorRate", DoubleValue(errRate2),
+                "ErrorUnit", EnumValue(RateErrorModel::ERROR_UNIT_PACKET)
+        );
+        std::cout << "Building error model completed" << std::endl;
+    }
+    else if (ErrorModel2 == 2) {
+        std::cout << "Burst Error Model is selected" << std::endl;
+        Ptr <BurstErrorModel> em2 = CreateObjectWithAttributes<BurstErrorModel>(
+                "BurstSize", StringValue("ns3::UniformRandomVariable[Min=1,Max=4]"),
+                "BurstStart", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=1.0]"),
+                "ErrorRate", DoubleValue(errRate2)
+        );
+        std::cout << "Building error model completed" << std::endl;
+    }
+    else {
+        //this will not change the error model
+        std::cout << "Unknown upload error model. Restore to default: rate error model" << std::endl;
     }
 
     DceManagerHelper dceManager, dceManagerNS3;
@@ -497,8 +535,8 @@ int main(int argc, char *argv[]) {
     switch (TypeOfConnection) {
         case 'p': {
             if(downloadMode){
-                //chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
-                //chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+                chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+                chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
 
                 // Launch iperf client on node 5 (core)
                 dce.SetBinary("iperf");
@@ -530,8 +568,8 @@ int main(int argc, char *argv[]) {
                 SerApps0.Start(Seconds(0.6));
 
             } else {
-                //chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
-                //chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+                chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+                chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
 
                 // Launch iperf client on node 0 (mobile device)
                 dce.SetBinary("iperf");
@@ -568,6 +606,9 @@ int main(int argc, char *argv[]) {
 
         case 'u': {
             if(downloadMode){
+                // chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+                // chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
+
                 // Launch iperf client on node 5 (core)
                 dce.SetBinary("iperf");
                 dce.ResetArguments();
@@ -601,6 +642,9 @@ int main(int argc, char *argv[]) {
                 ServerApps0.Start(Seconds(0.6));
 
             } else {
+                chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+                chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
+
                 // Launch iperf client on node 0 (mobile)
                 dce.SetBinary("iperf");
                 dce.ResetArguments();
@@ -639,6 +683,8 @@ int main(int argc, char *argv[]) {
 
 
         case 'w': {
+            chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+            chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
 
             dce.SetBinary("thttpd");
             dce.ResetArguments();
