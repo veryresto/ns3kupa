@@ -44,6 +44,32 @@ NS_LOG_COMPONENT_DEFINE ("DceCoba");
 //        you must add a sleep (1); to break the infinite loop....
 // ===========================================================================
 
+// function to get the last value in tcp_mem for tcp_mem_max
+string SplitLastValue(const std::string &str) {
+    //std::cout << "Splitting: " << str << '\n';
+    unsigned found = str.find_last_of(" ");
+    ostringstream temp;
+    temp << str.substr(found + 1);
+    return temp.str();
+}
+
+// remove comma if user make input with comma
+string RemoveComma(std::string &str) {
+    //std::cout << "test : " << str << '\n';
+    int i = 0;
+    std::string str2 = str;
+    for (i = 0; i < 3; i++) {
+
+        std::size_t found = str.find(',');
+        if (found != std::string::npos) {
+            str2 = str.replace(str.find(','), 1, " ");
+        } else {
+            //std::cout<<"no comma found.."<<std::endl;
+        }
+    }
+    return str2;
+}
+
 double FindPk(double k) {
 //read pk.txt and store it in 50x1 matrix
     ifstream in;
@@ -107,11 +133,23 @@ static void RunIP(Ptr <Node> node, Time at, string str) {
 
 int main(int argc, char *argv[]) {
     string stack = "linux";
+
     double errRate = 0.001;
+    double errRate2 = 0.001;
+    string tcp_cc = "reno";
+    string tcp_mem_user = "4096 8192 8388608";
+    string tcp_mem_user_wmem = "4096 8192 8388608";
+    string tcp_mem_user_rmem = "4096 8192 8388608";
+
+    string tcp_mem_server = "4096 8192 8388608";
+    string tcp_mem_server_wmem = "4096 8192 8388608";
+    string tcp_mem_server_rmem = "4096 8192 8388608";
+
+    string udp_bw = "1";
+
     int ErrorModel = 1;
     int monitor = 1;
     int mode = 0;
-    string tcp_cc = "reno";
 
     double k = 1;
     double pdv = 0;
@@ -122,7 +160,7 @@ int main(int argc, char *argv[]) {
     string dataRateDown = "10Mbps";
     bool downloadMode = true;
 
-    std::string bandWidth = "1m";
+    
     CommandLine cmd;
     cmd.AddValue("stack",
                  "Name of IP stack: ns3/linux/freebsd.",
@@ -137,7 +175,7 @@ int main(int argc, char *argv[]) {
     cmd.AddValue("htmlSize", "Size of html to be downloaded by wget (Mbytes).", htmlSize);
     cmd.AddValue("dataRateUp", "Data rate of devices (Mbps).", dataRateUp);
     cmd.AddValue("dataRateDown", "Data rate of devices (Mbps).", dataRateDown);
-    cmd.AddValue("bw", "BandWidth. Default 1m.", bandWidth);
+    cmd.AddValue("udp_bw", "BandWidth. Default 1m.", udp_bw);
     cmd.AddValue("errRate", "Error rate.", errRate);
     cmd.AddValue("avg_delay", "Average delay.", avg_delay);
     cmd.AddValue("pdv", "theta for normal random distribution in this channel", pdv);
@@ -200,10 +238,10 @@ int main(int argc, char *argv[]) {
 
     // p2p2 #1
     // Beginning of channel for mobile router to BSDown
-    PointToPointHelper pointToPoint;
-    pointToPoint.SetDeviceAttribute("DataRate", StringValue(dataRateDown));
-    pointToPoint.SetChannelAttribute("Delay", StringValue("1ms"));
-    NetDeviceContainer chanRouterBSDown = pointToPoint.Install(routerBSDown);
+    PointToPointHelper p2pMobRouterBSDown;
+    p2pMobRouterBSDown.SetDeviceAttribute("DataRate", StringValue(dataRateDown));
+    p2pMobRouterBSDown.SetChannelAttribute("Delay", StringValue("1ms"));
+    NetDeviceContainer chanRouterBSDown = p2pMobRouterBSDown.Install(routerBSDown);
     // Ending of channel for mobile router to BSDown
 
     // p2p #2
@@ -235,7 +273,7 @@ int main(int argc, char *argv[]) {
     p2pCoreRouterBSUp.SetChannelAttribute("k", DoubleValue(k));
     p2pCoreRouterBSUp.SetChannelAttribute("transparent", UintegerValue(0));
     p2pCoreRouterBSUp.SetChannelAttribute("theta", DoubleValue(theta));
-    NetDeviceContainer chanBSRouterUp = pointToPoint.Install(BSRouterUp);
+    NetDeviceContainer chanBSRouterUp = p2pCoreRouterBSUp.Install(BSRouterUp);
     // Ending of channel for core router to BSUp
 
     // p2p #5
@@ -292,14 +330,14 @@ int main(int argc, char *argv[]) {
         std::cout << "Unknown download error model. Restore to default: rate error model" << std::endl;
     }
 
-    DceManagerHelper dceManager;
-    dceManager.SetTaskManagerAttribute("FiberManagerType", StringValue("UcontextFiberManager"));
+    DceManagerHelper dceManager, dceManagerNS3;
+    dceManagerNS3.SetTaskManagerAttribute("FiberManagerType", StringValue("UcontextFiberManager"));
 
     if (stack == "ns3") {
-        dceManager.Install(mobile);
-        dceManager.Install(router);
-        dceManager.Install(BS);
-        dceManager.Install(core);
+        dceManagerNS3.Install(mobile);
+        dceManagerNS3.Install(router);
+        dceManagerNS3.Install(BS);
+        dceManagerNS3.Install(core);
 
         InternetStackHelper stack;
         stack.Install(mobile);
@@ -310,18 +348,47 @@ int main(int argc, char *argv[]) {
     }
     else if (stack == "linux") {
 #ifdef KERNEL_STACK
+        // DCE Manager Installation
         dceManager.SetNetworkStack ("ns3::LinuxSocketFdFactory", "Library", StringValue ("liblinux.so"));
         dceManager.Install (mobile);
         dceManager.Install (router);
         dceManager.Install (BS);
         dceManager.Install (core);
 
+        // Stack Installation
         LinuxStackHelper stack;
-        LinuxStackHelper routerStack;
-        stack.Install(mobile);
-        routerStack.Install(router);
+        stack.Install (mobile);
+        stack.Install (router);
         stack.Install (BS);
         stack.Install (core);
+
+        // remove comma from input, if any
+        tcp_mem_user = RemoveComma(tcp_mem_user);
+        tcp_mem_user_wmem = RemoveComma(tcp_mem_user_wmem);
+        tcp_mem_user_rmem = RemoveComma(tcp_mem_user_rmem);
+        tcp_mem_server = RemoveComma(tcp_mem_server);
+        tcp_mem_server_wmem = RemoveComma(tcp_mem_server_wmem);
+        tcp_mem_server_rmem = RemoveComma(tcp_mem_server_rmem);
+
+        // after comma removal
+        string tcp_mem_user_max_wmem = SplitLastValue(tcp_mem_server_wmem);
+        string tcp_mem_user_max_rmem = SplitLastValue(tcp_mem_server_rmem);
+        string tcp_mem_server_max_wmem = SplitLastValue(tcp_mem_server_wmem);
+        string tcp_mem_server_max_rmem = SplitLastValue(tcp_mem_server_rmem);
+
+        stack.SysctlSet (mobile.Get(0), ".net.ipv4.tcp_mem", tcp_mem_user);
+        stack.SysctlSet (mobile.Get(0), ".net.ipv4.tcp_wmem", tcp_mem_server_wmem);
+        stack.SysctlSet (mobile.Get(0), ".net.ipv4.tcp_rmem", tcp_mem_user_rmem);
+        stack.SysctlSet (mobile.Get(0), ".net.core.wmem_max", tcp_mem_user_max_wmem);
+        stack.SysctlSet (mobile.Get(0), ".net.core.rmem_max", tcp_mem_user_max_rmem);
+        stack.SysctlSet (mobile.Get(0), ".net.core.netdev_max_backlog", "250000");
+            
+        stack.SysctlSet (core.Get(0), ".net.ipv4.tcp_mem", tcp_mem_server);
+        stack.SysctlSet (core.Get(0), ".net.ipv4.tcp_wmem", tcp_mem_server_wmem);
+        stack.SysctlSet (core.Get(0), ".net.ipv4.tcp_rmem", tcp_mem_server_rmem);
+        stack.SysctlSet (core.Get(0), ".net.core.wmem_max", tcp_mem_server_max_wmem);
+        stack.SysctlSet (core.Get(0), ".net.core.rmem_max", tcp_mem_server_max_rmem);
+        stack.SysctlSet (core.Get(0), ".net.core.netdev_max_backlog", "250000");
 
         stack.SysctlSet (mobile, ".net.ipv4.tcp_congestion_control", tcp_cc);
         stack.SysctlSet (BS, ".net.ipv4.tcp_congestion_control", tcp_cc);
@@ -399,12 +466,12 @@ int main(int argc, char *argv[]) {
         // mobile router
         cmd_oss.str("");
         cmd_oss << "route add " << "10.9.2.2" << "/255.255.255.255" << " via " << "10.2.1.2";
-        //LinuxStackHelper::RunIp(router.Get(0), Seconds(0.1), cmd_oss.str().c_str());
+        LinuxStackHelper::RunIp(router.Get(0), Seconds(0.1), cmd_oss.str().c_str());
 
         // core router
         cmd_oss.str("");
         cmd_oss << "route add " << "10.9.1.1" << "/255.255.255.255" << " via " << "10.1.2.1";
-        //LinuxStackHelper::RunIp(router.Get(1), Seconds(0.1), cmd_oss.str().c_str());
+        LinuxStackHelper::RunIp(router.Get(1), Seconds(0.1), cmd_oss.str().c_str());
 
         // BS DOWNLINK
         cmd_oss.str("");
@@ -442,13 +509,15 @@ int main(int argc, char *argv[]) {
                 dce.AddArgument("-i");
                 dce.AddArgument("1");
                 dce.AddArgument("--time");
-                dce.AddArgument("2");
+                dce.AddArgument("10");
                 ApplicationContainer ClientApps0 = dce.Install(core.Get(0));
                 ClientApps0.Start(Seconds(0.7));
                 ClientApps0.Stop(Seconds(20));
 
-                // dump traffics from all channels
-                p2pMobRouter.EnablePcapAll("TCP_download");
+                // dump traffics from several channels
+                p2pMobRouter.EnablePcap("TCP_download", chanMobileRouter);
+                p2pMobRouter.EnablePcap("TCP_download", chanRouterCore);
+
 
                 // Launch iperf server on node 0 (mobile device)
                 dce.SetBinary("iperf");
@@ -473,13 +542,14 @@ int main(int argc, char *argv[]) {
                 dce.AddArgument("-i");
                 dce.AddArgument("1");
                 dce.AddArgument("--time");
-                dce.AddArgument("2");
+                dce.AddArgument("10");
                 ApplicationContainer ClientApps0 = dce.Install(mobile.Get(0));
                 ClientApps0.Start(Seconds(0.7));
                 ClientApps0.Stop(Seconds(20));
 
-                // dump traffics from all channels
-                p2pMobRouter.EnablePcapAll("TCP_upload");
+                // dump traffics from several channels
+                p2pMobRouter.EnablePcap("TCP_upload", chanMobileRouter);
+                p2pMobRouter.EnablePcap("TCP_upload", chanRouterCore);
 
                 // Launch iperf server on node 5 (core)
                 dce.SetBinary("iperf");
@@ -507,16 +577,17 @@ int main(int argc, char *argv[]) {
                 dce.AddArgument("-i");
                 dce.AddArgument("1");
                 dce.AddArgument("--time");
-                dce.AddArgument("2");
+                dce.AddArgument("10");
                 dce.AddArgument("-u");
                 dce.AddArgument("-b");
-                dce.AddArgument(bandWidth);
+                dce.AddArgument(udp_bw + "m");
                 ApplicationContainer apps = dce.Install(core.Get(0));
                 apps.Start(Seconds(0.7));
                 apps.Stop(Seconds(20));
 
-                // dump traffics from all channels
-                p2pMobRouter.EnablePcapAll("UDP_download");
+                // dump traffics from several channels
+                p2pMobRouter.EnablePcap("UDP_download", chanMobileRouter);
+                p2pMobRouter.EnablePcap("UDP_download", chanRouterCore);
 
                 // Launch iperf server on node 0 (mobile)
                 dce.SetBinary("iperf");
@@ -539,16 +610,17 @@ int main(int argc, char *argv[]) {
                 dce.AddArgument("-i");
                 dce.AddArgument("1");
                 dce.AddArgument("--time");
-                dce.AddArgument("2");
+                dce.AddArgument("10");
                 dce.AddArgument("-u");
                 dce.AddArgument("-b");
-                dce.AddArgument(bandWidth);
+                dce.AddArgument(udp_bw + "m");
                 ApplicationContainer apps = dce.Install(mobile.Get(0));
                 apps.Start(Seconds(0.7));
                 apps.Stop(Seconds(20));
 
-                // dump traffics from all channels
-                p2pMobRouter.EnablePcapAll("UDP_upload");
+                // dump traffics from several channels
+                p2pMobRouter.EnablePcap("UDP_download", chanMobileRouter);
+                p2pMobRouter.EnablePcap("UDP_download", chanRouterCore);
 
                 // Launch iperf server on node 0 (mobile)
                 dce.SetBinary("iperf");
@@ -595,9 +667,6 @@ int main(int argc, char *argv[]) {
         default:
             break;
     }
-
-    //+-+-
-
 
     Simulator::Stop(Seconds(40.0));
     std::cout << "Running simulation" << std::endl;
