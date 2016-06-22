@@ -414,8 +414,6 @@ int main(int argc, char *argv[]) {
         string tcp_mem_server_max_wmem = SplitLastValue(tcp_mem_server_wmem);
         string tcp_mem_server_max_rmem = SplitLastValue(tcp_mem_server_rmem);
 
-		// Set the value of send buffer size - net.ipv4.tcp_wmem
-		// Set the vaue of receive buffer size - net.ipv4.tcp_rmem
         stack.SysctlSet (mobile.Get(0), ".net.ipv4.tcp_mem", tcp_mem_user);
         stack.SysctlSet (mobile.Get(0), ".net.ipv4.tcp_wmem", tcp_mem_server_wmem);
         stack.SysctlSet (mobile.Get(0), ".net.ipv4.tcp_rmem", tcp_mem_user_rmem);
@@ -531,41 +529,40 @@ int main(int argc, char *argv[]) {
     DceApplicationHelper dce;
     dce.SetStackSize(1 << 20);
 
- 
+    //+-+-
+    // (ip.dst == 198.199.89.17 and ip.src == 192.168.100.7) or (ip.src == 198.199.89.17 and ip.dst == 192.168.100.7) 
+
     switch (TypeOfConnection) {
         case 'p': {
             if(downloadMode){
                 chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
                 chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
 
-                // Launch iperf client on node 5 (core)
-                dce.SetBinary("iperf");
+                // Launch rawudp client on node 5 (core)
+                dce.SetBinary("myping");
                 dce.ResetArguments();
                 dce.ResetEnvironment();
-                dce.AddArgument("-c");
+                dce.AddArgument("10.9.2.2");
+                //dce.AddArgument("21");
                 dce.AddArgument("10.9.1.1");
-                dce.AddArgument("-i");
-                dce.AddArgument("1");
-                dce.AddArgument("--time");
-                dce.AddArgument("10");
+                //dce.AddArgument("80");
                 ApplicationContainer ClientApps0 = dce.Install(core.Get(0));
                 ClientApps0.Start(Seconds(0.7));
-                ClientApps0.Stop(Seconds(20));
+                ClientApps0.Stop(Seconds(10));
 
                 // dump traffics from several channels
                 p2pMobRouter.EnablePcap("TCP_download", chanMobileRouter);
                 p2pMobRouter.EnablePcap("TCP_download", chanRouterCore);
-
-
+                
                 // Launch iperf server on node 0 (mobile device)
-                dce.SetBinary("iperf");
-                dce.ResetArguments();
-                dce.ResetEnvironment();
-                dce.AddArgument("-s");
-                dce.AddArgument("-P");
-                dce.AddArgument("1");
+                dce.SetBinary("thttpd");
+				dce.ResetArguments();
+				dce.ResetEnvironment();
+				dce.SetUid(1);
+				dce.SetEuid(1);
                 ApplicationContainer SerApps0 = dce.Install(mobile.Get(0));
                 SerApps0.Start(Seconds(0.6));
+
 
             } else {
                 chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
@@ -713,16 +710,6 @@ int main(int argc, char *argv[]) {
         default:
             break;
     }
-    
-    p2pCoreRouter.EnablePcapAll("dce-multi", false);
-    
-    AnimationInterface animation("de-multi.xml");
-	animation.SetConstantPosition(mobile.Get(0), 1.0, 2.0);
-	animation.SetConstantPosition(router.Get(0), 3.0, 2.0);
-	animation.SetConstantPosition(BS.Get(0), 5.0, 1.0);
-	animation.SetConstantPosition(BS.Get(1), 5.0, 3.0);
-	animation.SetConstantPosition(router.Get(1), 7.0, 2.0);
-	animation.SetConstantPosition(core.Get(0), 9.0, 2.0);
 
     Simulator::Stop(Seconds(40.0));
     std::cout << "Running simulation" << std::endl;
