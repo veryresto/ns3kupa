@@ -606,8 +606,8 @@ int main(int argc, char *argv[]) {
 
         case 'u': {
             if(downloadMode){
-                // chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
-                // chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
+                chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
+                chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
 
                 // Launch iperf client on node 5 (core)
                 dce.SetBinary("iperf");
@@ -716,13 +716,13 @@ int main(int argc, char *argv[]) {
     
     p2pCoreRouter.EnablePcapAll("dce-multi", false);
     
+	AnimationInterface::SetConstantPosition(mobile.Get(0), 1.0, 2.0);
+	AnimationInterface::SetConstantPosition(router.Get(0), 3.0, 2.0);
+	AnimationInterface::SetConstantPosition(BS.Get(0), 5.0, 1.0);
+	AnimationInterface::SetConstantPosition(BS.Get(1), 5.0, 3.0);
+	AnimationInterface::SetConstantPosition(router.Get(1), 7.0, 2.0);
+	AnimationInterface::SetConstantPosition(core.Get(0), 9.0, 2.0);
     AnimationInterface animation("de-multi.xml");
-	animation.SetConstantPosition(mobile.Get(0), 1.0, 2.0);
-	animation.SetConstantPosition(router.Get(0), 3.0, 2.0);
-	animation.SetConstantPosition(BS.Get(0), 5.0, 1.0);
-	animation.SetConstantPosition(BS.Get(1), 5.0, 3.0);
-	animation.SetConstantPosition(router.Get(1), 7.0, 2.0);
-	animation.SetConstantPosition(core.Get(0), 9.0, 2.0);
 
     Simulator::Stop(Seconds(40.0));
     std::cout << "Running simulation" << std::endl;
