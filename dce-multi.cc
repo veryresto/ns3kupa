@@ -371,20 +371,7 @@ int main(int argc, char *argv[]) {
     DceManagerHelper dceManager, dceManagerNS3;
     dceManagerNS3.SetTaskManagerAttribute("FiberManagerType", StringValue("UcontextFiberManager"));
 
-    if (stack == "ns3") {
-        dceManagerNS3.Install(mobile);
-        dceManagerNS3.Install(router);
-        dceManagerNS3.Install(BS);
-        dceManagerNS3.Install(core);
-
-        InternetStackHelper stack;
-        stack.Install(mobile);
-        stack.Install(router);
-        stack.Install(BS);
-        stack.Install(core);
-
-    }
-    else if (stack == "linux") {
+	if (stack == "linux") {
 #ifdef KERNEL_STACK
         // DCE Manager Installation
         dceManager.SetNetworkStack ("ns3::LinuxSocketFdFactory", "Library", StringValue ("liblinux.so"));
@@ -436,26 +423,6 @@ int main(int argc, char *argv[]) {
         stack.SysctlSet (router, ".net.ipv4.tcp_congestion_control", tcp_cc);
 #else
         NS_LOG_ERROR("Linux kernel stack for DCE is not available. build with dce-linux module.");
-        // silently exit
-        return 0;
-#endif
-    }
-    else if (stack == "freebsd") {
-#ifdef KERNEL_STACK
-        dceManager.SetNetworkStack ("ns3::FreeBSDSocketFdFactory", "Library", StringValue ("libfreebsd.so"));
-        dceManager.Install (mobile);
-        dceManager.Install (router);
-        dceManager.Install (BS);
-        dceManager.Install (core);
-
-        FreeBSDStackHelper stack;
-        FreeBSDStackHelper routerStack;
-        stack.Install(mobile);
-        routerStack.Install(router);
-        stack.Install (BS);
-        stack.Install (core);
-#else
-        NS_LOG_ERROR("FreeBSD kernel stack for DCE is not available. build with dce-freebsd module.");
         // silently exit
         return 0;
 #endif
