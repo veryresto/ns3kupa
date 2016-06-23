@@ -134,8 +134,8 @@ static void RunIP(Ptr <Node> node, Time at, string str) {
 int main(int argc, char *argv[]) {
     string stack = "linux";
 
-    double errRate = 0.001;
-    double errRate2 = 0.001;
+    double errRateDown = 0.001;
+    double errRateUp = 0.001;
     string tcp_cc = "reno";
     string tcp_mem_user = "4096 8192 8388608";
     string tcp_mem_user_wmem = "4096 8192 8388608";
@@ -146,9 +146,17 @@ int main(int argc, char *argv[]) {
     string tcp_mem_server_rmem = "4096 8192 8388608";
 
     string udp_bw = "1";
+    
+    double k_up = 0;
+	double pdv_up = 0;
+	double avg_delay_up=1;
+	
+	double k_dw = 0;
+	double pdv_dw = 0;
+	double avg_delay_dw=1;
 
-    int ErrorModel = 1;
-    int ErrorModel2 = 1;
+    int ErrorModelDown = 1;
+    int ErrorModelUp = 1;
     int monitor = 1;
     int mode = 0;
 
@@ -169,7 +177,7 @@ int main(int argc, char *argv[]) {
     cmd.AddValue("toc",
                  "Link type: p for iperf-tcp, u for iperf-udp and w for wget-thttpd, default to iperf-tcp",
                  TypeOfConnection);
-    cmd.AddValue("ModeOperation", "True for download mode. False for upload moded. HTTP will always be download mode.", downloadMode);
+    cmd.AddValue("op", "True for download mode. False for upload moded. HTTP will always be download mode.", downloadMode);
     cmd.AddValue("tcp_cc",
                  "TCP congestion control algorithm. Default is reno. Other options: bic, cubic, highspeed, htcp, hybla, illinois, lp, probe, scalable, vegas, veno, westwood, yeah",
                  tcp_cc);
@@ -177,28 +185,35 @@ int main(int argc, char *argv[]) {
     cmd.AddValue("dataRateUp", "Data rate of devices (Mbps).", dataRateUp);
     cmd.AddValue("dataRateDown", "Data rate of devices (Mbps).", dataRateDown);
     cmd.AddValue("udp_bw", "BandWidth. Default 1m.", udp_bw);
-    cmd.AddValue("errRate", "Error rate for downloaded.", errRate);
-    cmd.AddValue("errRate2", "Error rate for upload.", errRate2);
-    cmd.AddValue("ErrorModel",
+    cmd.AddValue("errRateDown", "Error rate for downloaded.", errRateDown);
+    cmd.AddValue("errRateUp", "Error rate for upload.", errRateUp);
+    cmd.AddValue("ErrorModelDown",
                  "Choose error model you want to use. options: 1 -rate error model-default, 2 - burst error model",
-                 ErrorModel);
-    cmd.AddValue("ErrorModel2",
+                 ErrorModelDown);
+    cmd.AddValue("ErrorModelUp",
                  "Choose error model you want to use. options: 1 -rate error model-default, 2 - burst error model",
-                 ErrorModel2);
+                 ErrorModelUp);
     cmd.AddValue("avg_delay", "Average delay.", avg_delay);
     cmd.AddValue("pdv", "theta for normal random distribution in this channel", pdv);
     cmd.AddValue("chan_k", "Normal random distribution k in this channel", k);
+    
+    cmd.AddValue ("avg_delay_up", "average delay upstream.", avg_delay_up);
+    cmd.AddValue ("delay_pdv_up", "theta for normal random distribution in server-BS conection upstream", pdv_up);
+    cmd.AddValue ("chan_k_up", " Normal random distribution k in server-BS conection upstream", k_up);
+    
+    cmd.AddValue ("avg_delay_dw", "average delay downstream.", avg_delay_dw);
+    cmd.AddValue ("delay_pdv_dw", "theta for normal random distribution in server-BS conection downstream", pdv_dw);
+    cmd.AddValue ("chan_k_dw", " Normal random distribution k in server-BS conection downstream", k_dw);
     cmd.Parse(argc, argv);
 
-    // Calculating theta and delay
+    // BEGIN Calculating theta and delay
     double delay;
     double theta = 0;
     double pk = FindPk(k);
 
     theta = pdv / pk;
     delay = avg_delay - k * theta;
-    cout << "k: " << k << " | pk: " << pk << " | theta: " << theta << " | delay: " << delay << std::endl;
-
+    
     if (delay < 0) {
         cout << "Impossible delay. Abort simulation" << std::endl;
         cout << "Downstream" << std::endl;
@@ -206,6 +221,40 @@ int main(int argc, char *argv[]) {
         cout << "Calculated node processing time" << delay << std::endl;
         return 0;
     }
+    
+    double delay_up;
+	double theta_up;
+	double pk_up = FindPk(k_up);
+
+	theta_up = pdv_up/pk_up;
+	delay_up = avg_delay_up-k_up*theta_up;
+	cout << "k_up: " << k_up << " | pk_up: " << pk_up << " | theta_up: " << theta_up << " | delay_up: " << delay_up << std::endl;
+
+	if (delay_up < 0) {
+		std::cout << "IMPOSIBLE DELAY ABORT SIMULATION" << std::endl;
+		std::cout << "UPSTREAM" << std::endl;
+		std::cout << "calculated theta " << theta_up << std::endl;
+		std::cout << "calculater node processing time " << delay_up << std::endl;
+		return 0;
+	}
+
+
+	double delay_dw;
+	double theta_dw;
+	double pk_dw = FindPk(k_dw);
+
+	theta_dw = pdv_dw/pk_dw;
+	delay_dw = avg_delay_dw-k_dw*theta_dw;
+	cout << "k_dw: " << k_dw << " | pk_dw: " << pk_dw << " | theta_dw: " << theta_dw << " | delay_dw: " << delay_dw << std::endl;
+
+	if (delay_dw < 0) {
+		std::cout << "IMPOSIBLE DELAY ABORT SIMULATION" << std::endl;
+		std::cout << "DOWNSTREAM" << std::endl;
+		std::cout << "calculated theta " << theta_dw << std::endl;
+		std::cout << "calculater node processing time " << delay_dw << std::endl;
+		return 0;
+	}
+	// END Calculating theta and delay
 
     // Determining Mode
     if (downloadMode) {
@@ -248,7 +297,7 @@ int main(int argc, char *argv[]) {
     // Beginning of channel for mobile router to BSDown
     PointToPointHelper p2pMobRouterBSDown;
     p2pMobRouterBSDown.SetDeviceAttribute("DataRate", StringValue(dataRateDown));
-    p2pMobRouterBSDown.SetChannelAttribute("Delay", StringValue("1ms"));
+    p2pMobRouterBSDown.SetChannelAttribute("Delay", StringValue("0ms"));
     NetDeviceContainer chanRouterBSDown = p2pMobRouterBSDown.Install(routerBSDown);
     // Ending of channel for mobile router to BSDown
 
@@ -256,15 +305,20 @@ int main(int argc, char *argv[]) {
     // Beginning of channel for mobile router to BSUp
     PointToPointHelper p2pMobRouterBSUp;
     p2pMobRouterBSUp.SetDeviceAttribute("DataRate", StringValue(dataRateUp));
-    p2pMobRouterBSUp.SetChannelAttribute("Delay", StringValue("1ms"));
+    p2pMobRouterBSUp.SetChannelAttribute("Delay", StringValue("0ms"));
     NetDeviceContainer chanRouterBSUp = p2pMobRouterBSUp.Install(routerBSUp);
     // Ending of channel for mobile router to BSUp
 
     // p2p #3
     // Beginning of channel for core router to BSDown
+	std::ostringstream delay_oss;
+	delay_oss.str ("");
+	delay_oss << delay_dw <<"ms";
+	//std::cout << "delay ="<<delay_oss.str () <<std::endl;
+
     PointToPointHelper p2pCoreRouterBSDown;
     p2pCoreRouterBSDown.SetDeviceAttribute("DataRate", StringValue("200Gbps"));
-    p2pCoreRouterBSDown.SetChannelAttribute("Delay", StringValue("1ms"));
+    p2pCoreRouterBSDown.SetChannelAttribute("Delay", StringValue(delay_oss.str ().c_str ()));
     p2pCoreRouterBSDown.SetChannelAttribute("Jitter", UintegerValue(1));
     p2pCoreRouterBSDown.SetChannelAttribute("k", DoubleValue(k));
     p2pCoreRouterBSDown.SetChannelAttribute("transparent", UintegerValue(0));
@@ -272,11 +326,15 @@ int main(int argc, char *argv[]) {
     NetDeviceContainer chanBSRouterDown = p2pCoreRouterBSDown.Install(BSRouterDown);
     // Ending of channel for core router to BSDown
 
-    // p2p #4
-    // Beginning of channel for core router to BSUp
+	// p2p #4
+    // Beginning of channel for core router to BSUp  
+	delay_oss.str ("");
+	delay_oss << delay_dw <<"ms";
+	//std::cout << "delay ="<<delay_oss.str () <<std::endl;
+    
     PointToPointHelper p2pCoreRouterBSUp;
     p2pCoreRouterBSUp.SetDeviceAttribute("DataRate", StringValue("200Gbps"));
-    p2pCoreRouterBSUp.SetChannelAttribute("Delay", StringValue("1ms"));
+    p2pCoreRouterBSUp.SetChannelAttribute("Delay", StringValue(delay_oss.str ().c_str ()));
     p2pCoreRouterBSUp.SetChannelAttribute("Jitter", UintegerValue(1));
     p2pCoreRouterBSUp.SetChannelAttribute("k", DoubleValue(k));
     p2pCoreRouterBSUp.SetChannelAttribute("transparent", UintegerValue(0));
@@ -285,10 +343,10 @@ int main(int argc, char *argv[]) {
     // Ending of channel for core router to BSUp
 
     // p2p #5
-    // Beginng of channel for mobile router to mobile
+    // Beginning of channel for mobile router to mobile
     PointToPointHelper p2pMobRouter;
     p2pMobRouter.SetDeviceAttribute("DataRate", StringValue("200Gbps"));
-    p2pMobRouter.SetChannelAttribute("Delay", StringValue("1ms"));
+    p2pMobRouter.SetChannelAttribute("Delay", StringValue("0ms"));
     p2pMobRouter.SetChannelAttribute("transparent", UintegerValue(1));
     p2pMobRouter.SetChannelAttribute("coreRouter", UintegerValue(0));
     p2pMobRouter.SetChannelAttribute("monitor", UintegerValue(monitor));
@@ -297,10 +355,10 @@ int main(int argc, char *argv[]) {
     // Ending of channel for mobile router to mobile
 
     // p2p #6
-    // Beginng of channel for core router to core
+    // Beginning of channel for core router to core
     PointToPointHelper p2pCoreRouter;
     p2pCoreRouter.SetDeviceAttribute("DataRate", StringValue("200Gbps"));
-    p2pCoreRouter.SetChannelAttribute("Delay", StringValue("1ms"));
+    p2pCoreRouter.SetChannelAttribute("Delay", StringValue("0ms"));
     p2pMobRouter.SetChannelAttribute("transparent", UintegerValue(1));
     p2pMobRouter.SetChannelAttribute("coreRouter", UintegerValue(1));
     p2pMobRouter.SetChannelAttribute("monitor", UintegerValue(monitor));
@@ -308,65 +366,67 @@ int main(int argc, char *argv[]) {
     NetDeviceContainer chanRouterCore = p2pCoreRouter.Install(routerCore);
     // Ending of channel for core router to core
 
-    Ptr <RateErrorModel> em = CreateObjectWithAttributes<RateErrorModel>(
+	// BEGIN error model creation
+    Ptr <RateErrorModel> emDown = CreateObjectWithAttributes<RateErrorModel>(
             "RanVar", StringValue("ns3::UniformRandomVariable[Min=0.0,Max=1.0]"),
-            "ErrorRate", DoubleValue(errRate),
+            "ErrorRate", DoubleValue(errRateDown),
             "ErrorUnit", EnumValue(RateErrorModel::ERROR_UNIT_PACKET)
     );
-    std::cout << "Building error model..." << std::endl;
+    std::cout << "Building rate error model for downstream..." << std::endl;
 
-    if (ErrorModel == 1) {
-        std::cout << "Rate Error Model is selected" << std::endl;
-        Ptr <RateErrorModel> em = CreateObjectWithAttributes<RateErrorModel>(
+    if (ErrorModelDown == 1) {
+        std::cout << "Rate Error Model is selected for downstream" << std::endl;
+        Ptr <RateErrorModel> emDown = CreateObjectWithAttributes<RateErrorModel>(
                 "RanVar", StringValue("ns3::UniformRandomVariable[Min=0.0,Max=1.0]"),
-                "ErrorRate", DoubleValue(errRate),
+                "ErrorRate", DoubleValue(errRateDown),
                 "ErrorUnit", EnumValue(RateErrorModel::ERROR_UNIT_PACKET)
         );
-        std::cout << "Building error model completed" << std::endl;
+        std::cout << "Building rate error model is completed for downstream" << std::endl;
     }
-    else if (ErrorModel == 2) {
-        std::cout << "Burst Error Model is selected" << std::endl;
-        Ptr <BurstErrorModel> em = CreateObjectWithAttributes<BurstErrorModel>(
+    else if (ErrorModelDown == 2) {
+        std::cout << "Burst Error Model is selected for downstream" << std::endl;
+        Ptr <BurstErrorModel> emDown = CreateObjectWithAttributes<BurstErrorModel>(
                 "BurstSize", StringValue("ns3::UniformRandomVariable[Min=1,Max=4]"),
                 "BurstStart", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=1.0]"),
-                "ErrorRate", DoubleValue(errRate)
+                "ErrorRate", DoubleValue(errRateDown)
         );
-        std::cout << "Building error model completed" << std::endl;
+        std::cout << "Building burst error model is completed for downstream" << std::endl;
     }
     else {
         //this will not change the error model
-        std::cout << "Unknown download error model. Restore to default: rate error model" << std::endl;
+        std::cout << "Unknown download error model for downstream. Restore to default: rate error model" << std::endl;
     }
 
-    Ptr <RateErrorModel> em2 = CreateObjectWithAttributes<RateErrorModel>(
+    Ptr <RateErrorModel> emUp = CreateObjectWithAttributes<RateErrorModel>(
             "RanVar", StringValue("ns3::UniformRandomVariable[Min=0.0,Max=1.0]"),
-            "ErrorRate", DoubleValue(errRate2),
+            "ErrorRate", DoubleValue(errRateUp),
             "ErrorUnit", EnumValue(RateErrorModel::ERROR_UNIT_PACKET)
     );
-    std::cout << "Building error model..." << std::endl;
+    std::cout << "Building rate error model for upstream..." << std::endl;
 
-    if (ErrorModel2 == 1) {
-        std::cout << "Rate Error Model is selected" << std::endl;
-        Ptr <RateErrorModel> em2 = CreateObjectWithAttributes<RateErrorModel>(
+    if (ErrorModelUp == 1) {
+        std::cout << "Rate Error Model is selected for upstream" << std::endl;
+        Ptr <RateErrorModel> emUp = CreateObjectWithAttributes<RateErrorModel>(
                 "RanVar", StringValue("ns3::UniformRandomVariable[Min=0.0,Max=1.0]"),
-                "ErrorRate", DoubleValue(errRate2),
+                "ErrorRate", DoubleValue(errRateUp),
                 "ErrorUnit", EnumValue(RateErrorModel::ERROR_UNIT_PACKET)
         );
-        std::cout << "Building error model completed" << std::endl;
+        std::cout << "Building rate error model is completed for upstream" << std::endl;
     }
-    else if (ErrorModel2 == 2) {
-        std::cout << "Burst Error Model is selected" << std::endl;
-        Ptr <BurstErrorModel> em2 = CreateObjectWithAttributes<BurstErrorModel>(
+    else if (ErrorModelUp == 2) {
+        std::cout << "Burst Error Model is selected for upstream" << std::endl;
+        Ptr <BurstErrorModel> emUp = CreateObjectWithAttributes<BurstErrorModel>(
                 "BurstSize", StringValue("ns3::UniformRandomVariable[Min=1,Max=4]"),
                 "BurstStart", StringValue("ns3::UniformRandomVariable[Min=0.0|Max=1.0]"),
-                "ErrorRate", DoubleValue(errRate2)
+                "ErrorRate", DoubleValue(errRateUp)
         );
-        std::cout << "Building error model completed" << std::endl;
+        std::cout << "Building burst error model is completed for upstream" << std::endl;
     }
     else {
         //this will not change the error model
-        std::cout << "Unknown upload error model. Restore to default: rate error model" << std::endl;
+        std::cout << "Unknown upload error model for upstream. Restore to default: rate error model" << std::endl;
     }
+    // END error model creation
 
     DceManagerHelper dceManager, dceManagerNS3;
     dceManagerNS3.SetTaskManagerAttribute("FiberManagerType", StringValue("UcontextFiberManager"));
@@ -480,12 +540,12 @@ int main(int argc, char *argv[]) {
         cmd_oss << "route add " << "10.9.1.1" << "/255.255.255.255" << " via " << "10.1.2.1";
         LinuxStackHelper::RunIp(router.Get(1), Seconds(0.1), cmd_oss.str().c_str());
 
-        // BS DOWNLINK
+        // BS downstream
         cmd_oss.str("");
         cmd_oss << "route add " << "10.9.1.1" << "/255.255.255.255" << " via " << "10.1.1.1";
         LinuxStackHelper::RunIp(BS.Get(0), Seconds(0.1), cmd_oss.str().c_str());
 
-        // BS UPLINK
+        // BS upstream
         cmd_oss.str("");
         cmd_oss << "route add " << "10.9.2.2" << "/255.255.255.255" << " via " << "10.2.2.2";
         LinuxStackHelper::RunIp(BS.Get(1), Seconds(0.1), cmd_oss.str().c_str());
@@ -502,8 +562,8 @@ int main(int argc, char *argv[]) {
     switch (TypeOfConnection) {
         case 'p': {
             if(downloadMode){
-                chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
-                chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
+                chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(emDown));
+                chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(emUp));
 
                 // Launch iperf client on node 5 (core)
                 dce.SetBinary("iperf");
@@ -535,8 +595,8 @@ int main(int argc, char *argv[]) {
                 SerApps0.Start(Seconds(0.6));
 
             } else {
-                chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
-                chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
+                chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(emDown));
+                chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(emUp));
 
                 // Launch iperf client on node 0 (mobile device)
                 dce.SetBinary("iperf");
@@ -573,8 +633,8 @@ int main(int argc, char *argv[]) {
 
         case 'u': {
             if(downloadMode){
-                chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
-                chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
+                chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(emDown));
+                chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(emUp));
 
                 // Launch iperf client on node 5 (core)
                 dce.SetBinary("iperf");
@@ -609,8 +669,8 @@ int main(int argc, char *argv[]) {
                 ServerApps0.Start(Seconds(0.6));
 
             } else {
-                chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
-                chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
+                chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(emDown));
+                chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(emUp));
 
                 // Launch iperf client on node 0 (mobile)
                 dce.SetBinary("iperf");
@@ -650,8 +710,8 @@ int main(int argc, char *argv[]) {
 
 
         case 'w': {
-            chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(em));
-            chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(em2));
+            chanRouterBSDown.Get(0)->SetAttribute("ReceiveErrorModel", PointerValue(emDown));
+            chanBSRouterUp.Get(1)->SetAttribute("ReceiveErrorModel", PointerValue(emUp));
 
             dce.SetBinary("thttpd");
             dce.ResetArguments();
